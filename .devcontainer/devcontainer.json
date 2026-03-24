@@ -1,0 +1,14 @@
+{
+  "name": "Pohoda-MCP.NET (.NET 10)",
+  "image": "mcr.microsoft.com/devcontainers/dotnet:1-10.0",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-dotnettools.csharp",
+        "ms-dotnettools.csdevkit"
+      ]
+    }
+  },
+  "postCreateCommand": "dotnet new install Microsoft.McpServer.ProjectTemplates",
+  "remoteUser": "vscode"
+}
