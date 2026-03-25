@@ -2,6 +2,12 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0-noble AS build
 WORKDIR /src
 
+# Install native AOT prerequisites: clang (linker) and zlib1g-dev (compression library)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    clang \
+    zlib1g-dev \
+  && rm -rf /var/lib/apt/lists/*
+
 # Restore dependencies before copying the rest of the source for better layer caching
 COPY Pohoda-MCP.Net.csproj .
 RUN dotnet restore -r linux-x64
