@@ -27,8 +27,8 @@ WORKDIR /app
 COPY --from=build /app/publish .
 
 # Create a non-root user and adjust permissions for the application directory
-#RUN groupadd -r app && 
-RUN useradd -r -g app app && chown -R app:app /app
+#RUN groupadd -r app && useradd -r -g app app && 
+RUN chown -R app:app /app
 USER app
 
 # Configure ASP.NET Core to listen on port 8080 inside the container
