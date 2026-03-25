@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.Net.Http.Headers;
 using System.Text;
 using System.Xml;
 using System.Xml.Linq;
@@ -12,6 +11,7 @@ using ModelContextProtocol.Server;
 /// Schema: https://www.stormware.sk/xml/schema/version_2/addressbook.xsd
 /// </summary>
 internal sealed class AddressBookTools(IHttpClientFactory httpClientFactory, IConfiguration configuration)
+    : PohodaToolBase(httpClientFactory, configuration)
 {
     private const string DataNs    = "http://www.stormware.cz/schema/version_2/data.xsd";
     private const string AdbNs     = "http://www.stormware.cz/schema/version_2/addressbook.xsd";
@@ -41,11 +41,7 @@ internal sealed class AddressBookTools(IHttpClientFactory httpClientFactory, ICo
         [Description("Czech/Slovak VAT registration number (DIČ).")] string? dic = null,
         [Description("Internal note.")] string? note = null)
     {
-        var serverUrl  = configuration["Pohoda:ServerUrl"]  ?? throw new InvalidOperationException("Pohoda:ServerUrl is not configured.");
-        var username   = configuration["Pohoda:Username"]   ?? string.Empty;
-        var password   = configuration["Pohoda:Password"]   ?? string.Empty;
-        var companyIco = configuration["Pohoda:Ico"]        ?? string.Empty;
-        var appName    = configuration["Pohoda:Application"] ?? "MCP Server";
+        var (serverUrl, username, password, companyIco, appName) = GetPohodaSettings();
 
         var actionLower = action.Trim().ToLowerInvariant();
         if (actionLower is not ("add" or "update" or "delete"))
@@ -68,11 +64,7 @@ internal sealed class AddressBookTools(IHttpClientFactory httpClientFactory, ICo
         [Description("Optional company name filter (case-insensitive contains).")]
         string? companyContains = null)
     {
-        var serverUrl  = configuration["Pohoda:ServerUrl"]   ?? throw new InvalidOperationException("Pohoda:ServerUrl is not configured.");
-        var username   = configuration["Pohoda:Username"]    ?? string.Empty;
-        var password   = configuration["Pohoda:Password"]    ?? string.Empty;
-        var companyIco = configuration["Pohoda:Ico"]         ?? string.Empty;
-        var appName    = configuration["Pohoda:Application"] ?? "MCP Server";
+        var (serverUrl, username, password, companyIco, appName) = GetPohodaSettings();
 
         var xml = BuildListXml(companyIco, appName);
         var responseXml = await SendAsync(xml, serverUrl, username, password);
@@ -292,38 +284,4 @@ internal sealed class AddressBookTools(IHttpClientFactory httpClientFactory, ICo
         return sb.ToString();
     }
 
-    private static string ToJsonString(string? value)
-    {
-        if (value is null)
-            return "null";
-
-        return $"\"{value.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"";
-    }
-
-    private static void WriteOptional(XmlWriter w, string prefix, string local, string ns, string? value)
-    {
-        if (value is not null)
-            w.WriteElementString(prefix, local, ns, value);
-    }
-
-    private async Task<string> SendAsync(string xml, string serverUrl, string username, string password)
-    {
-        using var client = httpClientFactory.CreateClient();
-
-        if (!string.IsNullOrEmpty(username))
-        {
-            var token = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{username}:{password}"));
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", token);
-            client.DefaultRequestHeaders.Add("STW-Authorization", $"Basic {token}");
-        }
-
-        using var content = new StringContent(xml, Encoding.UTF8, "text/xml");
-        using var response = await client.PostAsync(serverUrl, content);
-        var responseBody = await response.Content.ReadAsStringAsync();
-
-        if (!response.IsSuccessStatusCode)
-            return $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}\n{responseBody}";
-
-        return responseBody;
-    }
 }

@@ -67,7 +67,7 @@ Refer to the VS Code or Visual Studio documentation for more information on conf
 
 ## Testing the MCP Server
 
-Once configured, you can ask Copilot Chat for a random number, for example, `Give me 3 random numbers`. It should prompt you to use the `get_random_number` tool on the `Pohoda-MCP.Net` MCP server and show you the results.
+Once configured, you can ask Copilot Chat to call one of the Pohoda tools, for example listing address book entries or received invoices.
 
 ## Known issues
 

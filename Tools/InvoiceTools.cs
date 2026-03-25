@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -43,6 +42,7 @@ internal sealed partial class InvoiceJsonContext : JsonSerializerContext { }
 /// Schema: https://www.stormware.sk/xml/schema/version_2/invoice.xsd
 /// </summary>
 internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfiguration configuration)
+    : PohodaToolBase(httpClientFactory, configuration)
 {
     private const string DataNs = "http://www.stormware.cz/schema/version_2/data.xsd";
     private const string InvNs  = "http://www.stormware.cz/schema/version_2/invoice.xsd";
@@ -57,11 +57,7 @@ internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfig
         [Description("Optional invoice number filter (case-insensitive contains).")]
         string? numberContains = null)
     {
-        var serverUrl  = configuration["Pohoda:ServerUrl"]   ?? throw new InvalidOperationException("Pohoda:ServerUrl is not configured.");
-        var username   = configuration["Pohoda:Username"]    ?? string.Empty;
-        var password   = configuration["Pohoda:Password"]    ?? string.Empty;
-        var companyIco = configuration["Pohoda:Ico"]         ?? string.Empty;
-        var appName    = configuration["Pohoda:Application"] ?? "MCP Server";
+        var (serverUrl, username, password, companyIco, appName) = GetPohodaSettings();
 
         var xml = BuildListReceivedInvoicesXml(companyIco, appName);
         var responseXml = await SendAsync(xml, serverUrl, username, password);
@@ -105,11 +101,7 @@ internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfig
             "{\"text\":\"…\",\"quantity\":1,\"unitPrice\":100.0,\"rateVAT\":\"high\",\"unit\":\"ks\"}. " +
             "'rateVAT' values: none | low | high | third.")] string? invoiceItemsJson = null)
     {
-        var serverUrl  = configuration["Pohoda:ServerUrl"]   ?? throw new InvalidOperationException("Pohoda:ServerUrl is not configured.");
-        var username   = configuration["Pohoda:Username"]    ?? string.Empty;
-        var password   = configuration["Pohoda:Password"]    ?? string.Empty;
-        var companyIco = configuration["Pohoda:Ico"]         ?? string.Empty;
-        var appName    = configuration["Pohoda:Application"] ?? "MCP Server";
+        var (serverUrl, username, password, companyIco, appName) = GetPohodaSettings();
 
         InvoiceItemDto[] items = [];
         if (!string.IsNullOrWhiteSpace(invoiceItemsJson))
@@ -264,12 +256,6 @@ internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfig
         return Encoding.UTF8.GetString(ms.ToArray());
     }
 
-    private static void WriteOptional(XmlWriter w, string prefix, string local, string ns, string? value)
-    {
-        if (value is not null)
-            w.WriteElementString(prefix, local, ns, value);
-    }
-
     private static string BuildListReceivedInvoicesXml(string companyIco, string appName)
     {
         var ms = new MemoryStream();
@@ -382,32 +368,4 @@ internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfig
         return sb.ToString();
     }
 
-    private static string ToJsonString(string? value)
-    {
-        if (value is null)
-            return "null";
-
-        return $"\"{value.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"";
-    }
-
-    private async Task<string> SendAsync(string xml, string serverUrl, string username, string password)
-    {
-        using var client = httpClientFactory.CreateClient();
-
-        if (!string.IsNullOrEmpty(username))
-        {
-            var token = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{username}:{password}"));
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", token);
-            client.DefaultRequestHeaders.Add("STW-Authorization", $"Basic {token}");
-        }
-
-        using var content = new StringContent(xml, Encoding.UTF8, "text/xml");
-        using var response = await client.PostAsync(serverUrl, content);
-        var responseBody = await response.Content.ReadAsStringAsync();
-
-        if (!response.IsSuccessStatusCode)
-            return $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}\n{responseBody}";
-
-        return responseBody;
-    }
 }

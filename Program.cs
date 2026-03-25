@@ -16,9 +16,9 @@ if (useStdio)
     RegisterServices(builder.Services);
     builder.Services.AddMcpServer()
         .WithStdioServerTransport()
-        .WithTools<RandomNumberTools>()
         .WithTools<AddressBookTools>()
-        .WithTools<InvoiceTools>();
+        .WithTools<InvoiceTools>()
+        .WithTools<VoucherTools>();
 
     await builder.Build().RunAsync();
 }
@@ -29,9 +29,9 @@ else
     RegisterServices(builder.Services);
     builder.Services.AddMcpServer()
         .WithHttpTransport()
-        .WithTools<RandomNumberTools>()
         .WithTools<AddressBookTools>()
-        .WithTools<InvoiceTools>();
+        .WithTools<InvoiceTools>()
+        .WithTools<VoucherTools>();
 
     var app = builder.Build();
     app.MapMcp();
