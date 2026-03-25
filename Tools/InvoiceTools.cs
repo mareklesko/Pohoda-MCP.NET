@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Xml;
+using System.Xml.Linq;
 using Microsoft.Extensions.Configuration;
 using ModelContextProtocol.Server;
 
@@ -46,6 +47,30 @@ internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfig
     private const string DataNs = "http://www.stormware.cz/schema/version_2/data.xsd";
     private const string InvNs  = "http://www.stormware.cz/schema/version_2/invoice.xsd";
     private const string TypNs  = "http://www.stormware.cz/schema/version_2/type.xsd";
+    private const string ListNs = "http://www.stormware.cz/schema/version_2/list.xsd";
+
+    [McpServerTool]
+    [Description("Returns received invoices from Pohoda as JSON. Optional filters can be applied by partner ICO and/or invoice number substring.")]
+    public async Task<string> ListReceivedInvoices(
+        [Description("Optional partner ICO filter (exact match).")]
+        string? partnerIco = null,
+        [Description("Optional invoice number filter (case-insensitive contains).")]
+        string? numberContains = null)
+    {
+        var serverUrl  = configuration["Pohoda:ServerUrl"]   ?? throw new InvalidOperationException("Pohoda:ServerUrl is not configured.");
+        var username   = configuration["Pohoda:Username"]    ?? string.Empty;
+        var password   = configuration["Pohoda:Password"]    ?? string.Empty;
+        var companyIco = configuration["Pohoda:Ico"]         ?? string.Empty;
+        var appName    = configuration["Pohoda:Application"] ?? "MCP Server";
+
+        var xml = BuildListReceivedInvoicesXml(companyIco, appName);
+        var responseXml = await SendAsync(xml, serverUrl, username, password);
+
+        if (responseXml.StartsWith("HTTP ", StringComparison.Ordinal))
+            return responseXml;
+
+        return ParseReceivedInvoices(responseXml, partnerIco, numberContains);
+    }
 
     [McpServerTool]
     [Description(
@@ -245,6 +270,126 @@ internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfig
             w.WriteElementString(prefix, local, ns, value);
     }
 
+    private static string BuildListReceivedInvoicesXml(string companyIco, string appName)
+    {
+        var ms = new MemoryStream();
+        var settings = new XmlWriterSettings
+        {
+            Indent = true,
+            Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+        };
+
+        using (var w = XmlWriter.Create(ms, settings))
+        {
+            w.WriteStartElement("dat", "dataPack", DataNs);
+            w.WriteAttributeString("id", "list-received-invoices");
+            w.WriteAttributeString("ico", companyIco);
+            w.WriteAttributeString("application", appName);
+            w.WriteAttributeString("version", "2.0");
+            w.WriteAttributeString("note", "list-received-invoices");
+
+            w.WriteStartElement("dat", "dataPackItem", DataNs);
+            w.WriteAttributeString("id", "1");
+            w.WriteAttributeString("version", "2.0");
+
+            w.WriteStartElement("lst", "listInvoiceRequest", ListNs);
+            w.WriteAttributeString("version", "2.0");
+            w.WriteAttributeString("invoiceType", "receivedInvoice");
+            w.WriteAttributeString("invoiceVersion", "2.0");
+
+            w.WriteStartElement("lst", "requestInvoice", ListNs);
+            w.WriteEndElement(); // requestInvoice
+
+            w.WriteEndElement(); // listInvoiceRequest
+            w.WriteEndElement(); // dataPackItem
+            w.WriteEndElement(); // dataPack
+        }
+
+        return Encoding.UTF8.GetString(ms.ToArray());
+    }
+
+    private static string ParseReceivedInvoices(string responseXml, string? partnerIcoFilter, string? numberContainsFilter)
+    {
+        var doc = XDocument.Parse(responseXml);
+
+        XNamespace lst = ListNs;
+        XNamespace inv = InvNs;
+        XNamespace typ = TypNs;
+
+        var items = doc
+            .Descendants(lst + "invoice")
+            .Select(invoice =>
+            {
+                var header = invoice.Element(inv + "invoiceHeader");
+                var partnerAddress = header
+                    ?.Element(inv + "partnerIdentity")
+                    ?.Element(typ + "address");
+
+                var numberNode = header?.Element(inv + "number");
+                var number = (string?)numberNode?.Element(typ + "numberRequested")
+                          ?? (string?)numberNode?.Element(typ + "numberIssued")
+                          ?? (string?)numberNode?.Element(typ + "numberReceived")
+                          ?? (string?)numberNode?.Element(typ + "number")
+                          ?? numberNode?.Value;
+
+                var homeCurrency = header?.Element(inv + "homeCurrency");
+                var total = (string?)homeCurrency?.Element(typ + "priceNone")
+                         ?? (string?)homeCurrency?.Element(typ + "priceLow")
+                         ?? (string?)homeCurrency?.Element(typ + "priceHigh")
+                         ?? (string?)homeCurrency?.Element(typ + "price3");
+
+                return new
+                {
+                    id = (string?)header?.Element(inv + "id"),
+                    number,
+                    date = (string?)header?.Element(inv + "date"),
+                    dateDue = (string?)header?.Element(inv + "dateDue"),
+                    text = (string?)header?.Element(inv + "text"),
+                    symVar = (string?)header?.Element(inv + "symVar"),
+                    partnerCompany = (string?)partnerAddress?.Element(typ + "company"),
+                    partnerIco = (string?)partnerAddress?.Element(typ + "ico"),
+                    totalHome = total,
+                };
+            })
+            .Where(x => string.IsNullOrWhiteSpace(partnerIcoFilter) || string.Equals(x.partnerIco, partnerIcoFilter, StringComparison.OrdinalIgnoreCase))
+            .Where(x => string.IsNullOrWhiteSpace(numberContainsFilter) ||
+                        (!string.IsNullOrWhiteSpace(x.number) && x.number.Contains(numberContainsFilter, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        var sb = new StringBuilder();
+        sb.AppendLine("[");
+
+        for (var i = 0; i < items.Count; i++)
+        {
+            var x = items[i];
+            sb.AppendLine("  {");
+            sb.AppendLine($"    \"id\": {ToJsonString(x.id)},");
+            sb.AppendLine($"    \"number\": {ToJsonString(x.number)},");
+            sb.AppendLine($"    \"date\": {ToJsonString(x.date)},");
+            sb.AppendLine($"    \"dateDue\": {ToJsonString(x.dateDue)},");
+            sb.AppendLine($"    \"text\": {ToJsonString(x.text)},");
+            sb.AppendLine($"    \"symVar\": {ToJsonString(x.symVar)},");
+            sb.AppendLine($"    \"partnerCompany\": {ToJsonString(x.partnerCompany)},");
+            sb.AppendLine($"    \"partnerIco\": {ToJsonString(x.partnerIco)},");
+            sb.AppendLine($"    \"totalHome\": {ToJsonString(x.totalHome)}");
+            sb.Append("  }");
+            if (i < items.Count - 1)
+                sb.Append(',');
+            sb.AppendLine();
+        }
+
+        sb.Append(']');
+        return sb.ToString();
+    }
+
+    private static string ToJsonString(string? value)
+    {
+        if (value is null)
+            return "null";
+
+        return $"\"{value.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"";
+    }
+
     private async Task<string> SendAsync(string xml, string serverUrl, string username, string password)
     {
         using var client = httpClientFactory.CreateClient();
@@ -253,6 +398,7 @@ internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfig
         {
             var token = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{username}:{password}"));
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", token);
+            client.DefaultRequestHeaders.Add("STW-Authorization", $"Basic {token}");
         }
 
         using var content = new StringContent(xml, Encoding.UTF8, "text/xml");
