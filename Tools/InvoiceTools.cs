@@ -103,6 +103,17 @@ internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfig
     {
         var (serverUrl, username, password, companyIco, appName) = GetPohodaSettings();
 
+        var supplierAddressbookId = await EnsureSupplierAndGetAddressbookIdAsync(
+            new SupplierInfo(
+                partnerCompany,
+                null,
+                partnerStreet,
+                partnerCity,
+                partnerZip,
+                partnerCountry,
+                partnerIco,
+                partnerDic));
+
         InvoiceItemDto[] items = [];
         if (!string.IsNullOrWhiteSpace(invoiceItemsJson))
         {
@@ -123,7 +134,7 @@ internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfig
 
         var xml = BuildXml(invoiceType, number, date, dateTax, dateDue, text,
                            partnerCompany, partnerStreet, partnerCity, partnerZip, partnerCountry,
-                           partnerIco, partnerDic, symVar, symConst, note, items,
+                   partnerIco, partnerDic, supplierAddressbookId, symVar, symConst, note, items,
                            companyIco, appName);
 
         return await SendAsync(xml, serverUrl, username, password);
@@ -137,6 +148,7 @@ internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfig
         string? text,
         string? partnerCompany, string? partnerStreet, string? partnerCity,
         string? partnerZip, string? partnerCountry, string? partnerIco, string? partnerDic,
+        string? partnerAddressbookId,
         string? symVar, string? symConst, string? note,
         InvoiceItemDto[] items,
         string companyIco, string appName)
@@ -198,27 +210,34 @@ internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfig
                 w.WriteElementString("inv", "symConst", InvNs, symConst);
 
             // <inv:partnerIdentity>
-            bool hasPartner = partnerCompany is not null || partnerStreet is not null
+            bool hasPartner = partnerAddressbookId is not null || partnerCompany is not null || partnerStreet is not null
                            || partnerCity is not null    || partnerZip is not null
                            || partnerCountry is not null || partnerIco is not null
                            || partnerDic is not null;
             if (hasPartner)
             {
                 w.WriteStartElement("inv", "partnerIdentity", InvNs);
-                w.WriteStartElement("typ", "address", TypNs);
-                WriteOptional(w, "typ", "company", TypNs, partnerCompany);
-                WriteOptional(w, "typ", "street",  TypNs, partnerStreet);
-                WriteOptional(w, "typ", "city",    TypNs, partnerCity);
-                WriteOptional(w, "typ", "zip",     TypNs, partnerZip);
-                if (partnerCountry is not null)
+                if (partnerAddressbookId is not null)
                 {
-                    w.WriteStartElement("typ", "country", TypNs);
-                    w.WriteElementString("typ", "ids", TypNs, partnerCountry);
-                    w.WriteEndElement();
+                    w.WriteElementString("typ", "id", TypNs, partnerAddressbookId);
                 }
-                WriteOptional(w, "typ", "ico", TypNs, partnerIco);
-                WriteOptional(w, "typ", "dic", TypNs, partnerDic);
-                w.WriteEndElement(); // address
+                else
+                {
+                    w.WriteStartElement("typ", "address", TypNs);
+                    WriteOptional(w, "typ", "company", TypNs, partnerCompany);
+                    WriteOptional(w, "typ", "street",  TypNs, partnerStreet);
+                    WriteOptional(w, "typ", "city",    TypNs, partnerCity);
+                    WriteOptional(w, "typ", "zip",     TypNs, partnerZip);
+                    if (partnerCountry is not null)
+                    {
+                        w.WriteStartElement("typ", "country", TypNs);
+                        w.WriteElementString("typ", "ids", TypNs, partnerCountry);
+                        w.WriteEndElement();
+                    }
+                    WriteOptional(w, "typ", "ico", TypNs, partnerIco);
+                    WriteOptional(w, "typ", "dic", TypNs, partnerDic);
+                    w.WriteEndElement(); // address
+                }
                 w.WriteEndElement(); // partnerIdentity
             }
 

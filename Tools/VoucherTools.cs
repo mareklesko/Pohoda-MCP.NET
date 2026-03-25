@@ -124,6 +124,17 @@ internal sealed class VoucherTools(IHttpClientFactory httpClientFactory, IConfig
     {
         var (serverUrl, username, password, companyIco, appName) = GetPohodaSettings();
 
+        var supplierAddressbookId = await EnsureSupplierAndGetAddressbookIdAsync(
+            new SupplierInfo(
+                partnerCompany,
+                partnerName,
+                partnerStreet,
+                partnerCity,
+                partnerZip,
+                null,
+                partnerIco,
+                partnerDic));
+
         VoucherItemDto[] items = [];
         if (!string.IsNullOrWhiteSpace(voucherItemsJson))
         {
@@ -157,6 +168,7 @@ internal sealed class VoucherTools(IHttpClientFactory httpClientFactory, IConfig
             partnerZip,
             partnerIco,
             partnerDic,
+            supplierAddressbookId,
             accounting,
             classificationVatType,
             symVar,
@@ -186,6 +198,7 @@ internal sealed class VoucherTools(IHttpClientFactory httpClientFactory, IConfig
         string? partnerZip,
         string? partnerIco,
         string? partnerDic,
+        string? partnerAddressbookId,
         string? accounting,
         string? classificationVatType,
         string? symVar,
@@ -258,21 +271,28 @@ internal sealed class VoucherTools(IHttpClientFactory httpClientFactory, IConfig
 
             WriteOptional(w, "vch", "text", VchNs, text);
 
-            bool hasPartner = partnerCompany is not null || partnerName is not null || partnerStreet is not null ||
+            bool hasPartner = partnerAddressbookId is not null || partnerCompany is not null || partnerName is not null || partnerStreet is not null ||
                               partnerCity is not null || partnerZip is not null || partnerIco is not null ||
                               partnerDic is not null;
             if (hasPartner)
             {
                 w.WriteStartElement("vch", "partnerIdentity", VchNs);
-                w.WriteStartElement("typ", "address", TypNs);
-                WriteOptional(w, "typ", "company", TypNs, partnerCompany);
-                WriteOptional(w, "typ", "name", TypNs, partnerName);
-                WriteOptional(w, "typ", "street", TypNs, partnerStreet);
-                WriteOptional(w, "typ", "city", TypNs, partnerCity);
-                WriteOptional(w, "typ", "zip", TypNs, partnerZip);
-                WriteOptional(w, "typ", "ico", TypNs, partnerIco);
-                WriteOptional(w, "typ", "dic", TypNs, partnerDic);
-                w.WriteEndElement();
+                if (partnerAddressbookId is not null)
+                {
+                    w.WriteElementString("typ", "id", TypNs, partnerAddressbookId);
+                }
+                else
+                {
+                    w.WriteStartElement("typ", "address", TypNs);
+                    WriteOptional(w, "typ", "company", TypNs, partnerCompany);
+                    WriteOptional(w, "typ", "name", TypNs, partnerName);
+                    WriteOptional(w, "typ", "street", TypNs, partnerStreet);
+                    WriteOptional(w, "typ", "city", TypNs, partnerCity);
+                    WriteOptional(w, "typ", "zip", TypNs, partnerZip);
+                    WriteOptional(w, "typ", "ico", TypNs, partnerIco);
+                    WriteOptional(w, "typ", "dic", TypNs, partnerDic);
+                    w.WriteEndElement();
+                }
                 w.WriteEndElement();
             }
 
