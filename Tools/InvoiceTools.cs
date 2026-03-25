@@ -89,8 +89,19 @@ internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfig
         InvoiceItemDto[] items = [];
         if (!string.IsNullOrWhiteSpace(invoiceItemsJson))
         {
-            items = JsonSerializer.Deserialize(invoiceItemsJson, InvoiceJsonContext.Default.InvoiceItemDtoArray)
-                    ?? [];
+            try
+            {
+                items = JsonSerializer.Deserialize(invoiceItemsJson, InvoiceJsonContext.Default.InvoiceItemDtoArray)
+                        ?? [];
+            }
+            catch (JsonException ex)
+            {
+                throw new ArgumentException(
+                    "Parameter 'invoiceItemsJson' must be a JSON array of objects like " +
+                    "[{\"text\":\"Service\",\"quantity\":1,\"unitPrice\":1000,\"rateVAT\":\"high\",\"unit\":\"ks\"}].",
+                    nameof(invoiceItemsJson),
+                    ex);
+            }
         }
 
         var xml = BuildXml(invoiceType, number, date, dateTax, dateDue, text,
