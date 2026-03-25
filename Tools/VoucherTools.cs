@@ -124,6 +124,9 @@ internal sealed class VoucherTools(IHttpClientFactory httpClientFactory, IConfig
     {
         var (serverUrl, username, password, companyIco, appName) = GetPohodaSettings();
 
+        symVar = NormalizeOptionalSymbol(nameof(symVar), symVar);
+        symPar = NormalizeOptionalSymbol(nameof(symPar), symPar);
+
         var supplierAddressbookId = await EnsureSupplierAndGetAddressbookIdAsync(
             new SupplierInfo(
                 partnerCompany,

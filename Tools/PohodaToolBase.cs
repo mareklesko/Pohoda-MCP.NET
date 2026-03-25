@@ -50,6 +50,21 @@ internal abstract class PohodaToolBase(IHttpClientFactory httpClientFactory, ICo
         return $"\"{value.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"";
     }
 
+    protected static string? NormalizeOptionalSymbol(string fieldName, string? value)
+    {
+        if (value is null)
+            return null;
+
+        var normalized = value.Trim();
+        if (normalized.Length == 0)
+            return null;
+
+        if (normalized.Length > 20)
+            throw new ArgumentException($"Parameter '{fieldName}' must have at most 20 characters.", fieldName);
+
+        return normalized;
+    }
+
     protected async Task<string?> EnsureSupplierAndGetAddressbookIdAsync(SupplierInfo supplier)
     {
         bool hasSupplierInfo = !string.IsNullOrWhiteSpace(supplier.Company)
