@@ -46,6 +46,8 @@ internal sealed class AddressBookTools(IHttpClientFactory httpClientFactory, ICo
         var appName    = configuration["Pohoda:Application"] ?? "MCP Server";
 
         var actionLower = action.Trim().ToLowerInvariant();
+        if (actionLower is not ("add" or "update" or "delete"))
+            throw new ArgumentException($"Unsupported action '{action}'. Expected 'add', 'update', or 'delete'.", nameof(action));
         if (actionLower is "update" or "delete" && string.IsNullOrWhiteSpace(ico) && string.IsNullOrWhiteSpace(company))
             throw new ArgumentException("Either 'ico' or 'company' must be provided to identify the record for update or delete.");
 
