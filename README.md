@@ -17,6 +17,34 @@ If you require more platforms to be supported, update the list of runtime identi
 
 Please note that this template is currently in an early preview stage. If you have feedback, please take a [brief survey](http://aka.ms/dotnet-mcp-template-survey).
 
+## Transport configuration
+
+The MCP server supports two transport modes, controlled by the `Mcp:Transport` key in `appsettings.json`:
+
+| Value | Description |
+|-------|-------------|
+| `http` (default) | HTTP-based transport, suitable for VS Code / Visual Studio |
+| `stdio` | Standard I/O transport, suitable for Claude Desktop / studio clients |
+
+**`appsettings.json`:**
+```json
+{
+  "Mcp": {
+    "Transport": "stdio"
+  }
+}
+```
+
+**Environment variable:**
+```
+Mcp__Transport=stdio
+```
+
+**Command-line argument** (note the `=` sign required by the .NET command-line configuration provider):
+```
+./Pohoda-MCP.Net --Mcp:Transport=stdio
+```
+
 ## Developing locally
 
 To test this MCP server from source code (locally), you can configure your IDE to connect to the server using localhost.

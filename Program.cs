@@ -13,12 +13,8 @@ if (useStdio)
 {
     var builder = Host.CreateApplicationBuilder(args);
 
-    // Register HttpClient for Pohoda API calls.
-    builder.Services.AddHttpClient();
-
-    // Add the MCP services: stdio transport and the tools to register.
-    builder.Services
-        .AddMcpServer()
+    RegisterServices(builder.Services);
+    builder.Services.AddMcpServer()
         .WithStdioServerTransport()
         .WithTools<RandomNumberTools>()
         .WithTools<AddressBookTools>()
@@ -30,12 +26,8 @@ else
 {
     var builder = WebApplication.CreateBuilder(args);
 
-    // Register HttpClient for Pohoda API calls.
-    builder.Services.AddHttpClient();
-
-    // Add the MCP services: http transport and the tools to register.
-    builder.Services
-        .AddMcpServer()
+    RegisterServices(builder.Services);
+    builder.Services.AddMcpServer()
         .WithHttpTransport()
         .WithTools<RandomNumberTools>()
         .WithTools<AddressBookTools>()
@@ -45,4 +37,10 @@ else
     app.MapMcp();
 
     await app.RunAsync();
+}
+
+static void RegisterServices(IServiceCollection services)
+{
+    // Register HttpClient for Pohoda API calls.
+    services.AddHttpClient();
 }
