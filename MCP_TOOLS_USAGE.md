@@ -33,6 +33,7 @@ The server currently provides these tools:
 - `import_address_book`
 - `list_address_book`
 - `import_invoice`
+- `list_issued_invoices`
 - `list_received_invoices`
 - `import_voucher`
 - `list_vouchers`
@@ -169,6 +170,33 @@ Examples:
 ```json
 {
   "partnerIco": "87654321"
+}
+```
+
+```json
+{
+  "numberContains": "2026"
+}
+```
+
+### list_issued_invoices
+
+Lists issued invoices as JSON.
+
+Arguments:
+
+- `partnerIco` optional exact match filter
+- `numberContains` optional case-insensitive substring filter
+
+Examples:
+
+```json
+{}
+```
+
+```json
+{
+  "partnerIco": "12345678"
 }
 ```
 

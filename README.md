@@ -67,7 +67,7 @@ Refer to the VS Code or Visual Studio documentation for more information on conf
 
 ## Testing the MCP Server
 
-Once configured, you can ask Copilot Chat to call one of the Pohoda tools, for example listing address book entries or received invoices.
+Once configured, you can ask Copilot Chat to call one of the Pohoda tools, for example listing address book entries, received invoices, or issued invoices.
 
 ## Known issues
 

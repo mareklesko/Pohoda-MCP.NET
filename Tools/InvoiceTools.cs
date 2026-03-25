@@ -71,6 +71,25 @@ internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfig
     }
 
     [McpServerTool]
+    [Description("Returns issued invoices from Pohoda as JSON. Optional filters can be applied by partner ICO and/or invoice number substring.")]
+    public async Task<string> ListIssuedInvoices(
+        [Description("Optional partner ICO filter (exact match).")]
+        string? partnerIco = null,
+        [Description("Optional invoice number filter (case-insensitive contains).")]
+        string? numberContains = null)
+    {
+        var (serverUrl, username, password, companyIco, appName) = GetPohodaSettings();
+
+        var xml = BuildListIssuedInvoicesXml(companyIco, appName);
+        var responseXml = await SendAsync(xml, serverUrl, username, password);
+
+        if (responseXml.StartsWith("HTTP ", StringComparison.Ordinal))
+            return responseXml;
+
+        return ParseInvoices(responseXml, partnerIco, numberContains);
+    }
+
+    [McpServerTool]
     [Description(
         "Creates an invoice in Pohoda. " +
         "Supply 'invoiceItemsJson' as a JSON array of objects with fields: " +
@@ -350,6 +369,9 @@ internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfig
     private static string BuildListReceivedInvoicesXml(string companyIco, string appName)
         => BuildListInvoicesXml("receivedInvoice", companyIco, appName);
 
+    private static string BuildListIssuedInvoicesXml(string companyIco, string appName)
+        => BuildListInvoicesXml("issuedInvoice", companyIco, appName);
+
     private static string BuildListInvoicesXml(string invoiceType, string companyIco, string appName)
     {
         var ms = new MemoryStream();
@@ -389,6 +411,9 @@ internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfig
     }
 
     private static string ParseReceivedInvoices(string responseXml, string? partnerIcoFilter, string? numberContainsFilter)
+        => ParseInvoices(responseXml, partnerIcoFilter, numberContainsFilter);
+
+    private static string ParseInvoices(string responseXml, string? partnerIcoFilter, string? numberContainsFilter)
     {
         var items = ParseInvoiceRows(responseXml)
             .Where(x => string.IsNullOrWhiteSpace(partnerIcoFilter) || string.Equals(x.partnerIco, partnerIcoFilter, StringComparison.OrdinalIgnoreCase))
