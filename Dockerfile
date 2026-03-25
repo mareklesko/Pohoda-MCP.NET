@@ -1,5 +1,5 @@
 # Build stage – requires the full SDK with native AOT toolchain (clang)
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0-noble AS build
 WORKDIR /src
 
 # Restore dependencies before copying the rest of the source for better layer caching
@@ -15,12 +15,16 @@ RUN dotnet publish Pohoda-MCP.Net.csproj \
     -o /app/publish
 
 # Runtime stage – minimal image sufficient for native AOT / self-contained apps
-FROM mcr.microsoft.com/dotnet/runtime-deps:10.0
+FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-noble
 WORKDIR /app
 
 COPY --from=build /app/publish .
 
-# ASP.NET Core listens on port 8080 by default inside containers (.NET 8+)
+# Create a non-root user and adjust permissions for the application directory
+RUN groupadd -r app && useradd -r -g app app && chown -R app:app /app
+USER app
+
+# Configure ASP.NET Core to listen on port 8080 inside the container
 EXPOSE 8080
 ENV ASPNETCORE_HTTP_PORTS=8080
 
