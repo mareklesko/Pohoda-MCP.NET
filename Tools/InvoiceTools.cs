@@ -256,7 +256,7 @@ internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfig
         }
 
         using var content = new StringContent(xml, Encoding.UTF8, "text/xml");
-        var response = await client.PostAsync(serverUrl, content);
+        using var response = await client.PostAsync(serverUrl, content);
         var responseBody = await response.Content.ReadAsStringAsync();
 
         if (!response.IsSuccessStatusCode)
