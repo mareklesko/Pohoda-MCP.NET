@@ -36,6 +36,25 @@ internal sealed class InvoiceItemDto
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 internal sealed partial class InvoiceJsonContext : JsonSerializerContext { }
 
+internal sealed record InvoiceImportRequest(
+    string InvoiceType,
+    string? Number,
+    string? Date,
+    string? DateTax,
+    string? DateDue,
+    string? Text,
+    string? PartnerCompany,
+    string? PartnerStreet,
+    string? PartnerCity,
+    string? PartnerZip,
+    string? PartnerCountry,
+    string? PartnerIco,
+    string? PartnerDic,
+    string? SymVar,
+    string? SymConst,
+    string? Note,
+    string? InvoiceItemsJson);
+
 // ---------------------------------------------------------------------------
 
 /// <summary>
@@ -51,36 +70,234 @@ internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfig
     private const string TypNs  = "http://www.stormware.cz/schema/version_2/type.xsd";
     private const string ListNs = "http://www.stormware.cz/schema/version_2/list.xsd";
 
+    private const string PartnerIcoFilterDescription = "Optional partner ICO filter (exact match).";
+    private const string NumberContainsDescription = "Optional document number filter (case-insensitive contains).";
+    private const string NumberDescription = "Document number (optional; Pohoda assigns the next number in the series if omitted).";
+    private const string DateDescription = "Date of issue (yyyy-MM-dd). Defaults to today.";
+    private const string DateTaxDescription = "Date of taxable supply (yyyy-MM-dd). Defaults to date of issue.";
+    private const string DateDueDescription = "Due date (yyyy-MM-dd).";
+    private const string PartnerCompanyDescription = "Partner company name.";
+    private const string PartnerStreetDescription = "Partner street address.";
+    private const string PartnerCityDescription = "Partner city.";
+    private const string PartnerZipDescription = "Partner ZIP / postal code.";
+    private const string PartnerCountryDescription = "Two-letter partner country code, e.g. 'CZ' or 'SK'.";
+    private const string PartnerIcoDescription = "Partner company registration number (IČO).";
+    private const string PartnerDicDescription = "Partner VAT registration number (DIČ).";
+    private const string SymVarDescription = "Variable symbol (reference number shown on the payment).";
+    private const string SymConstDescription = "Constant symbol.";
+    private const string NoteDescription = "Internal note.";
+    private const string InvoiceItemsDescription =
+        "Line items as a JSON array. Each object: " +
+        "{\"text\":\"…\",\"quantity\":1,\"unitPrice\":100.0,\"rateVAT\":\"high\",\"unit\":\"ks\"}. " +
+        "'rateVAT' values: none | low | high | third.";
+
     [McpServerTool]
     [Description("Returns received invoices from Pohoda as JSON. Optional filters can be applied by partner ICO and/or invoice number substring.")]
-    public async Task<string> ListReceivedInvoices(
-        [Description("Optional partner ICO filter (exact match).")]
+    public Task<string> ListReceivedInvoices(
+        [Description(PartnerIcoFilterDescription)]
         string? partnerIco = null,
-        [Description("Optional invoice number filter (case-insensitive contains).")]
+        [Description(NumberContainsDescription)]
         string? numberContains = null)
-    {
-        var (serverUrl, username, password, companyIco, appName) = GetPohodaSettings();
-
-        var xml = BuildListReceivedInvoicesXml(companyIco, appName);
-        var responseXml = await SendAsync(xml, serverUrl, username, password);
-
-        if (responseXml.StartsWith("HTTP ", StringComparison.Ordinal))
-            return responseXml;
-
-        return ParseReceivedInvoices(responseXml, partnerIco, numberContains);
-    }
+        => ListInvoicesAsync("receivedInvoice", partnerIco, numberContains);
 
     [McpServerTool]
     [Description("Returns issued invoices from Pohoda as JSON. Optional filters can be applied by partner ICO and/or invoice number substring.")]
-    public async Task<string> ListIssuedInvoices(
-        [Description("Optional partner ICO filter (exact match).")]
+    public Task<string> ListIssuedInvoices(
+        [Description(PartnerIcoFilterDescription)]
         string? partnerIco = null,
-        [Description("Optional invoice number filter (case-insensitive contains).")]
+        [Description(NumberContainsDescription)]
         string? numberContains = null)
+        => ListInvoicesAsync("issuedInvoice", partnerIco, numberContains);
+
+    [McpServerTool]
+    [Description("Returns commitments (ostatne zavazky) from Pohoda as JSON. Optional filters can be applied by partner ICO and/or document number substring.")]
+    public Task<string> ListCommitments(
+        [Description(PartnerIcoFilterDescription)]
+        string? partnerIco = null,
+        [Description(NumberContainsDescription)]
+        string? numberContains = null)
+        => ListInvoicesAsync("commitment", partnerIco, numberContains);
+
+    [McpServerTool]
+    [Description("Returns receivables (ostatne pohladavky) from Pohoda as JSON. Optional filters can be applied by partner ICO and/or document number substring.")]
+    public Task<string> ListReceivables(
+        [Description(PartnerIcoFilterDescription)]
+        string? partnerIco = null,
+        [Description(NumberContainsDescription)]
+        string? numberContains = null)
+        => ListInvoicesAsync("receivable", partnerIco, numberContains);
+
+    [McpServerTool]
+    [Description(
+        "Creates an invoice in Pohoda. " +
+        "Supply 'invoiceItemsJson' as a JSON array of objects with fields: " +
+        "text (string), quantity (number), unitPrice (number), rateVAT ('none'|'low'|'high'|'third'), unit (string, optional). " +
+        "Example: [{\"text\":\"Service\",\"quantity\":1,\"unitPrice\":1000,\"rateVAT\":\"high\"}]")]
+    public Task<string> ImportInvoice(
+        [Description(
+            "Invoice type. One of: issuedInvoice (default), receivedInvoice, " +
+            "issuedAdvanceInvoice, receivedAdvanceInvoice, " +
+            "issuedCreditNotice, receivedCreditNotice, " +
+            "issuedDebitNotice, receivedDebitNotice, " +
+            "receivable, commitment.")] string invoiceType = "issuedInvoice",
+        [Description(NumberDescription)] string? number = null,
+        [Description(DateDescription)] string? date = null,
+        [Description(DateTaxDescription)] string? dateTax = null,
+        [Description(DateDueDescription)] string? dateDue = null,
+        [Description("Invoice description / header text.")] string? text = null,
+        [Description(PartnerCompanyDescription)] string? partnerCompany = null,
+        [Description(PartnerStreetDescription)] string? partnerStreet = null,
+        [Description(PartnerCityDescription)] string? partnerCity = null,
+        [Description(PartnerZipDescription)] string? partnerZip = null,
+        [Description(PartnerCountryDescription)] string? partnerCountry = null,
+        [Description(PartnerIcoDescription)] string? partnerIco = null,
+        [Description(PartnerDicDescription)] string? partnerDic = null,
+        [Description(SymVarDescription)] string? symVar = null,
+        [Description(SymConstDescription)] string? symConst = null,
+        [Description(NoteDescription)] string? note = null,
+        [Description(InvoiceItemsDescription)] string? invoiceItemsJson = null)
+        => ImportInvoiceAsync(new InvoiceImportRequest(
+            invoiceType,
+            number,
+            date,
+            dateTax,
+            dateDue,
+            text,
+            partnerCompany,
+            partnerStreet,
+            partnerCity,
+            partnerZip,
+            partnerCountry,
+            partnerIco,
+            partnerDic,
+            symVar,
+            symConst,
+            note,
+            invoiceItemsJson));
+
+    [McpServerTool]
+    [Description(
+        "Creates a commitment (ostatny zavazok) in Pohoda using the invoice schema with invoiceType 'commitment'. " +
+        "Supply 'invoiceItemsJson' as a JSON array of objects with fields: " +
+        "text (string), quantity (number), unitPrice (number), rateVAT ('none'|'low'|'high'|'third'), unit (string, optional). " +
+        "If partner details are provided, the tool first looks for an address book entry and binds it; if none exists, it creates one and then binds the commitment to it.")]
+    public Task<string> ImportCommitment(
+        [Description(NumberDescription)]
+        string? number = null,
+        [Description(DateDescription)]
+        string? date = null,
+        [Description(DateTaxDescription)]
+        string? dateTax = null,
+        [Description(DateDueDescription)]
+        string? dateDue = null,
+        [Description("Commitment description / header text.")]
+        string? text = null,
+        [Description(PartnerCompanyDescription)]
+        string? partnerCompany = null,
+        [Description(PartnerStreetDescription)]
+        string? partnerStreet = null,
+        [Description(PartnerCityDescription)]
+        string? partnerCity = null,
+        [Description(PartnerZipDescription)]
+        string? partnerZip = null,
+        [Description(PartnerCountryDescription)]
+        string? partnerCountry = null,
+        [Description(PartnerIcoDescription)]
+        string? partnerIco = null,
+        [Description(PartnerDicDescription)]
+        string? partnerDic = null,
+        [Description(SymVarDescription)]
+        string? symVar = null,
+        [Description(SymConstDescription)]
+        string? symConst = null,
+        [Description(NoteDescription)]
+        string? note = null,
+        [Description(InvoiceItemsDescription)]
+        string? invoiceItemsJson = null)
+        => ImportInvoiceAsync(new InvoiceImportRequest(
+            "commitment",
+            number,
+            date,
+            dateTax,
+            dateDue,
+            text,
+            partnerCompany,
+            partnerStreet,
+            partnerCity,
+            partnerZip,
+            partnerCountry,
+            partnerIco,
+            partnerDic,
+            symVar,
+            symConst,
+            note,
+            invoiceItemsJson));
+
+    [McpServerTool]
+    [Description(
+        "Creates a receivable (ostatna pohladavka) in Pohoda using the invoice schema with invoiceType 'receivable'. " +
+        "Supply 'invoiceItemsJson' as a JSON array of objects with fields: " +
+        "text (string), quantity (number), unitPrice (number), rateVAT ('none'|'low'|'high'|'third'), unit (string, optional). " +
+        "If partner details are provided, the tool first looks for an address book entry and binds it; if none exists, it creates one and then binds the receivable to it.")]
+    public Task<string> ImportReceivable(
+        [Description(NumberDescription)]
+        string? number = null,
+        [Description(DateDescription)]
+        string? date = null,
+        [Description(DateTaxDescription)]
+        string? dateTax = null,
+        [Description(DateDueDescription)]
+        string? dateDue = null,
+        [Description("Receivable description / header text.")]
+        string? text = null,
+        [Description(PartnerCompanyDescription)]
+        string? partnerCompany = null,
+        [Description(PartnerStreetDescription)]
+        string? partnerStreet = null,
+        [Description(PartnerCityDescription)]
+        string? partnerCity = null,
+        [Description(PartnerZipDescription)]
+        string? partnerZip = null,
+        [Description(PartnerCountryDescription)]
+        string? partnerCountry = null,
+        [Description(PartnerIcoDescription)]
+        string? partnerIco = null,
+        [Description(PartnerDicDescription)]
+        string? partnerDic = null,
+        [Description(SymVarDescription)]
+        string? symVar = null,
+        [Description(SymConstDescription)]
+        string? symConst = null,
+        [Description(NoteDescription)]
+        string? note = null,
+        [Description(InvoiceItemsDescription)]
+        string? invoiceItemsJson = null)
+        => ImportInvoiceAsync(new InvoiceImportRequest(
+            "receivable",
+            number,
+            date,
+            dateTax,
+            dateDue,
+            text,
+            partnerCompany,
+            partnerStreet,
+            partnerCity,
+            partnerZip,
+            partnerCountry,
+            partnerIco,
+            partnerDic,
+            symVar,
+            symConst,
+            note,
+            invoiceItemsJson));
+
+    // -------------------------------------------------------------------------
+
+    private async Task<string> ListInvoicesAsync(string invoiceType, string? partnerIco, string? numberContains)
     {
         var (serverUrl, username, password, companyIco, appName) = GetPohodaSettings();
 
-        var xml = BuildListIssuedInvoicesXml(companyIco, appName);
+        var xml = BuildListInvoicesXml(invoiceType, companyIco, appName);
         var responseXml = await SendAsync(xml, serverUrl, username, password);
 
         if (responseXml.StartsWith("HTTP ", StringComparison.Ordinal))
@@ -89,100 +306,37 @@ internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfig
         return ParseInvoices(responseXml, partnerIco, numberContains);
     }
 
-    [McpServerTool]
-    [Description(
-        "Creates an invoice in Pohoda. " +
-        "Supply 'invoiceItemsJson' as a JSON array of objects with fields: " +
-        "text (string), quantity (number), unitPrice (number), rateVAT ('none'|'low'|'high'|'third'), unit (string, optional). " +
-        "Example: [{\"text\":\"Service\",\"quantity\":1,\"unitPrice\":1000,\"rateVAT\":\"high\"}]")]
-    public async Task<string> ImportInvoice(
-        [Description(
-            "Invoice type. One of: issuedInvoice (default), receivedInvoice, " +
-            "issuedAdvanceInvoice, receivedAdvanceInvoice, " +
-            "issuedCreditNotice, receivedCreditNotice, " +
-            "issuedDebitNotice, receivedDebitNotice, " +
-            "receivable, commitment.")] string invoiceType = "issuedInvoice",
-        [Description("Invoice number (optional; Pohoda assigns the next number in the series if omitted).")] string? number = null,
-        [Description("Date of issue (yyyy-MM-dd). Defaults to today.")] string? date = null,
-        [Description("Date of taxable supply (yyyy-MM-dd). Defaults to date of issue.")] string? dateTax = null,
-        [Description("Due date (yyyy-MM-dd).")] string? dateDue = null,
-        [Description("Invoice description / header text.")] string? text = null,
-        [Description("Partner company name.")] string? partnerCompany = null,
-        [Description("Partner street address.")] string? partnerStreet = null,
-        [Description("Partner city.")] string? partnerCity = null,
-        [Description("Partner ZIP / postal code.")] string? partnerZip = null,
-        [Description("Two-letter partner country code, e.g. 'CZ' or 'SK'.")] string? partnerCountry = null,
-        [Description("Partner company registration number (IČO).")] string? partnerIco = null,
-        [Description("Partner VAT registration number (DIČ).")] string? partnerDic = null,
-        [Description("Variable symbol (reference number shown on the payment).")] string? symVar = null,
-        [Description("Constant symbol.")] string? symConst = null,
-        [Description("Internal note.")] string? note = null,
-        [Description(
-            "Line items as a JSON array. Each object: " +
-            "{\"text\":\"…\",\"quantity\":1,\"unitPrice\":100.0,\"rateVAT\":\"high\",\"unit\":\"ks\"}. " +
-            "'rateVAT' values: none | low | high | third.")] string? invoiceItemsJson = null)
+    private async Task<string> ImportInvoiceAsync(InvoiceImportRequest request)
     {
         var (serverUrl, username, password, companyIco, appName) = GetPohodaSettings();
 
-        if (!string.IsNullOrWhiteSpace(number))
-        {
-            var digitsOnly = new string(number.Where(char.IsDigit).ToArray());
-            symVar = digitsOnly.Length switch
-            {
-                0 => null,
-                > 10 => digitsOnly[..10],
-                _ => digitsOnly,
-            };
-        }
-        else
-        {
-            symVar = NormalizeOptionalSymbol(nameof(symVar), symVar);
-        }
-
-        symConst = NormalizeOptionalSymbol(nameof(symConst), symConst);
+        var normalizedSymVar = NormalizeSymVar(request.Number, request.SymVar);
+        var normalizedSymConst = NormalizeOptionalSymbol(nameof(request.SymConst), request.SymConst);
 
         var supplierAddressbookId = await EnsureSupplierAndGetAddressbookIdAsync(
             new SupplierInfo(
-                partnerCompany,
+                request.PartnerCompany,
                 null,
-                partnerStreet,
-                partnerCity,
-                partnerZip,
-                partnerCountry,
-                partnerIco,
-                partnerDic));
+                request.PartnerStreet,
+                request.PartnerCity,
+                request.PartnerZip,
+                request.PartnerCountry,
+                request.PartnerIco,
+                request.PartnerDic));
 
-        InvoiceItemDto[] items = [];
-        if (!string.IsNullOrWhiteSpace(invoiceItemsJson))
-        {
-            try
-            {
-                items = JsonSerializer.Deserialize(invoiceItemsJson, InvoiceJsonContext.Default.InvoiceItemDtoArray)
-                        ?? [];
-            }
-            catch (JsonException ex)
-            {
-                throw new ArgumentException(
-                    "Parameter 'invoiceItemsJson' must be a JSON array of objects like " +
-                    "[{\"text\":\"Service\",\"quantity\":1,\"unitPrice\":1000,\"rateVAT\":\"high\",\"unit\":\"ks\"}].",
-                    nameof(invoiceItemsJson),
-                    ex);
-            }
-        }
-
-        var normalizedSymVar = symVar;
+        var items = DeserializeInvoiceItems(request.InvoiceItemsJson);
         decimal? expectedTotal = items.Length > 0
             ? items.Sum(i => (decimal)i.Quantity * (decimal)i.UnitPrice)
             : null;
 
         if (normalizedSymVar is not null && expectedTotal is not null &&
-            (!string.IsNullOrWhiteSpace(partnerIco) || !string.IsNullOrWhiteSpace(partnerCompany)))
+            (!string.IsNullOrWhiteSpace(request.PartnerIco) || !string.IsNullOrWhiteSpace(request.PartnerCompany)))
         {
             var exists = await InvoiceExistsAsync(
-                invoiceType,
+                request.InvoiceType,
                 normalizedSymVar,
-                partnerIco,
-                partnerCompany,
+                request.PartnerIco,
+                request.PartnerCompany,
                 expectedTotal.Value,
                 serverUrl,
                 username,
@@ -196,15 +350,65 @@ internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfig
             }
         }
 
-        var xml = BuildXml(invoiceType, date, dateTax, dateDue, text,
-                           partnerCompany, partnerStreet, partnerCity, partnerZip, partnerCountry,
-                   partnerIco, partnerDic, supplierAddressbookId, symVar, symConst, note, items,
-                           companyIco, appName);
+        var xml = BuildXml(
+            request.InvoiceType,
+            request.Date,
+            request.DateTax,
+            request.DateDue,
+            request.Text,
+            request.PartnerCompany,
+            request.PartnerStreet,
+            request.PartnerCity,
+            request.PartnerZip,
+            request.PartnerCountry,
+            request.PartnerIco,
+            request.PartnerDic,
+            supplierAddressbookId,
+            normalizedSymVar,
+            normalizedSymConst,
+            request.Note,
+            items,
+            companyIco,
+            appName);
 
         return await SendAsync(xml, serverUrl, username, password);
     }
 
-    // -------------------------------------------------------------------------
+    private static string? NormalizeSymVar(string? number, string? symVar)
+    {
+        if (!string.IsNullOrWhiteSpace(number))
+        {
+            var digitsOnly = new string(number.Where(char.IsDigit).ToArray());
+            return digitsOnly.Length switch
+            {
+                0 => null,
+                > 10 => digitsOnly[..10],
+                _ => digitsOnly,
+            };
+        }
+
+        return NormalizeOptionalSymbol(nameof(symVar), symVar);
+    }
+
+    private static InvoiceItemDto[] DeserializeInvoiceItems(string? invoiceItemsJson)
+    {
+        if (string.IsNullOrWhiteSpace(invoiceItemsJson))
+            return [];
+
+        try
+        {
+            return JsonSerializer.Deserialize(invoiceItemsJson, InvoiceJsonContext.Default.InvoiceItemDtoArray)
+                   ?? [];
+        }
+        catch (JsonException ex)
+        {
+            throw new ArgumentException(
+                "Parameter 'invoiceItemsJson' must be a JSON array of objects like " +
+                "[{\"text\":\"Service\",\"quantity\":1,\"unitPrice\":1000,\"rateVAT\":\"high\",\"unit\":\"ks\"}].",
+                nameof(invoiceItemsJson),
+                ex);
+        }
+    }
 
     private static string BuildXml(
         string invoiceType,
@@ -366,12 +570,6 @@ internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfig
                string.Equals(row.PartnerCompany, partnerCompany, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string BuildListReceivedInvoicesXml(string companyIco, string appName)
-        => BuildListInvoicesXml("receivedInvoice", companyIco, appName);
-
-    private static string BuildListIssuedInvoicesXml(string companyIco, string appName)
-        => BuildListInvoicesXml("issuedInvoice", companyIco, appName);
-
     private static string BuildListInvoicesXml(string invoiceType, string companyIco, string appName)
     {
         var ms = new MemoryStream();
@@ -384,11 +582,11 @@ internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfig
         using (var w = XmlWriter.Create(ms, settings))
         {
             w.WriteStartElement("dat", "dataPack", DataNs);
-            w.WriteAttributeString("id", "list-received-invoices");
+            w.WriteAttributeString("id", $"list-{invoiceType}");
             w.WriteAttributeString("ico", companyIco);
             w.WriteAttributeString("application", appName);
             w.WriteAttributeString("version", "2.0");
-            w.WriteAttributeString("note", "list-received-invoices");
+            w.WriteAttributeString("note", $"list-{invoiceType}");
 
             w.WriteStartElement("dat", "dataPackItem", DataNs);
             w.WriteAttributeString("id", "1");

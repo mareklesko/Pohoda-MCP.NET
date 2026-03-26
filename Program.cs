@@ -18,7 +18,8 @@ if (useStdio)
         .WithStdioServerTransport()
         .WithTools<AddressBookTools>()
         .WithTools<InvoiceTools>()
-        .WithTools<VoucherTools>();
+        .WithTools<VoucherTools>()
+        .WithTools<InternalDocumentTools>();
 
     await builder.Build().RunAsync();
 }
@@ -31,7 +32,8 @@ else
         .WithHttpTransport()
         .WithTools<AddressBookTools>()
         .WithTools<InvoiceTools>()
-        .WithTools<VoucherTools>();
+        .WithTools<VoucherTools>()
+        .WithTools<InternalDocumentTools>();
 
     var app = builder.Build();
     app.MapMcp();
