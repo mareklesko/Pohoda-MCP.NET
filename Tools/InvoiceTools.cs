@@ -687,7 +687,8 @@ internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfig
                           ?? (string?)numberNode?.Element(typ + "number")
                           ?? numberNode?.Value;
 
-                var homeCurrency = header?.Element(inv + "homeCurrency");
+                var summary = invoice.Element(inv + "invoiceSummary");
+                var homeCurrency = summary?.Element(inv + "homeCurrency");
                 var total = (string?)homeCurrency?.Element(typ + "priceNone")
                          ?? (string?)homeCurrency?.Element(typ + "priceLow")
                          ?? (string?)homeCurrency?.Element(typ + "priceHigh")
