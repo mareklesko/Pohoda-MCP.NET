@@ -304,8 +304,13 @@ internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfig
         [Description("Document number of the invoice to cancel (e.g. 'F2024001').")]
         string? number = null)
     {
+        if (string.IsNullOrWhiteSpace(invoiceType))
+            throw new ArgumentException("A non-empty invoice type is required.", nameof(invoiceType));
+
         if (string.IsNullOrWhiteSpace(id) && string.IsNullOrWhiteSpace(number))
             throw new ArgumentException("Either 'id' or 'number' must be provided to identify the invoice to cancel.");
+
+        invoiceType = invoiceType.Trim();
 
         var (serverUrl, username, password, companyIco, appName) = GetPohodaSettings();
         var xml = BuildCancelXml(invoiceType, id, number, companyIco, appName);
