@@ -33,6 +33,7 @@ The server currently provides these tools:
 - `import_address_book`
 - `list_address_book`
 - `import_invoice`
+- `cancel_invoice`
 - `list_issued_invoices`
 - `list_received_invoices`
 - `import_commitment`
@@ -40,6 +41,7 @@ The server currently provides these tools:
 - `import_receivable`
 - `list_receivables`
 - `import_voucher`
+- `cancel_voucher`
 - `list_vouchers`
 - `import_internal_document`
 - `list_internal_documents`
@@ -155,6 +157,34 @@ Received invoice example:
   "symVar": "2026001",
   "note": "Imported by MCP",
   "invoiceItemsJson": "[{\"text\":\"Office supplies\",\"quantity\":1,\"unitPrice\":4500,\"rateVAT\":\"high\"}]"
+}
+```
+
+### cancel_invoice
+
+Cancels (stornos) an invoice in Pohoda by creating a reversal document. Supply either `id` (Pohoda internal record ID) or `number` (document number) to identify the invoice. `invoiceType` must match the type of the original document.
+
+Important behavior:
+
+- Creates a storno document that offsets the original — no physical deletion occurs.
+- At least one of `id` or `number` is required.
+- `invoiceType` accepted values: `issuedInvoice`, `receivedInvoice`, `issuedAdvanceInvoice`, `receivedAdvanceInvoice`, `issuedCreditNotice`, `receivedCreditNotice`, `issuedDebitNotice`, `receivedDebitNotice`, `receivable`, `commitment`.
+
+Cancel by internal ID example:
+
+```json
+{
+  "invoiceType": "issuedInvoice",
+  "id": "12345"
+}
+```
+
+Cancel by document number example:
+
+```json
+{
+  "invoiceType": "receivedInvoice",
+  "number": "F2026001"
 }
 ```
 
@@ -375,6 +405,31 @@ Voucher with detail items example:
 }
 ```
 
+### cancel_voucher
+
+Cancels (stornos) a voucher in Pohoda by creating a reversal document. Supply either `id` (Pohoda internal record ID) or `number` (document number) to identify the voucher.
+
+Important behavior:
+
+- Creates a storno document that offsets the original — no physical deletion occurs.
+- At least one of `id` or `number` is required.
+
+Cancel by internal ID example:
+
+```json
+{
+  "id": "5678"
+}
+```
+
+Cancel by document number example:
+
+```json
+{
+  "number": "P2026042"
+}
+```
+
 ### list_vouchers
 
 Lists vouchers as JSON.
@@ -528,3 +583,5 @@ Examples:
 - Date format should be `yyyy-MM-dd`.
 - When sending item arrays, pass JSON as escaped string (`invoiceItemsJson`, `voucherItemsJson`, `internalDocumentItemsJson`).
 - On HTTP/API errors, tools return a string starting with `HTTP <status>` and the response body.
+- `cancel_invoice` and `cancel_voucher` create a **storno** (reversal) document — physical deletion is not supported by the Pohoda XML API for these document types.
+- Internal documents (`import_internal_document`) do not have a cancel/delete operation in the Pohoda XML schema.
