@@ -291,6 +291,32 @@ internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfig
             note,
             invoiceItemsJson));
 
+    [McpServerTool]
+    [Description(
+        "Cancels (stornos) an invoice in Pohoda by creating a reversal document. " +
+        "Supply either 'id' (Pohoda internal record ID) or 'number' (document number) to identify the invoice to cancel. " +
+        "'invoiceType' must match the type of the original document.")]
+    public async Task<string> CancelInvoice(
+        [Description("Invoice type of the document to cancel: issuedInvoice | receivedInvoice | issuedAdvanceInvoice | receivedAdvanceInvoice | issuedCreditNotice | receivedCreditNotice | issuedDebitNotice | receivedDebitNotice | receivable | commitment.")]
+        string invoiceType,
+        [Description("Pohoda internal record ID of the invoice to cancel.")]
+        string? id = null,
+        [Description("Document number of the invoice to cancel (e.g. 'F2024001').")]
+        string? number = null)
+    {
+        if (string.IsNullOrWhiteSpace(invoiceType))
+            throw new ArgumentException("A non-empty invoice type is required.", nameof(invoiceType));
+
+        if (string.IsNullOrWhiteSpace(id) && string.IsNullOrWhiteSpace(number))
+            throw new ArgumentException("Either 'id' or 'number' must be provided to identify the invoice to cancel.");
+
+        invoiceType = invoiceType.Trim();
+
+        var (serverUrl, username, password, companyIco, appName) = GetPohodaSettings();
+        var xml = BuildCancelXml(invoiceType, id, number, companyIco, appName);
+        return await SendAsync(xml, serverUrl, username, password);
+    }
+
     // -------------------------------------------------------------------------
 
     private async Task<string> ListInvoicesAsync(string invoiceType, string? partnerIco, string? numberContains)
@@ -531,6 +557,59 @@ internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfig
             w.WriteEndElement(); // invoice
             w.WriteEndElement(); // dataPackItem
             w.WriteEndElement(); // dataPack
+        }
+
+        return Encoding.UTF8.GetString(ms.ToArray());
+    }
+
+    private static string BuildCancelXml(
+        string invoiceType,
+        string? id,
+        string? number,
+        string companyIco,
+        string appName)
+    {
+        var ms = new MemoryStream();
+        var settings = new XmlWriterSettings
+        {
+            Indent = true,
+            Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+        };
+
+        using (var w = XmlWriter.Create(ms, settings))
+        {
+            w.WriteStartElement("dat", "dataPack", DataNs);
+            w.WriteAttributeString("id",          "001");
+            w.WriteAttributeString("ico",         companyIco);
+            w.WriteAttributeString("application", appName);
+            w.WriteAttributeString("version",     "2.0");
+            w.WriteAttributeString("note",        string.Empty);
+
+            w.WriteStartElement("dat", "dataPackItem", DataNs);
+            w.WriteAttributeString("id",      "001");
+            w.WriteAttributeString("version", "2.0");
+
+            w.WriteStartElement("inv", "invoice", InvNs);
+            w.WriteAttributeString("version", "2.0");
+
+            // cancelDocument identifies the document to be storno-ed
+            w.WriteStartElement("inv", "cancelDocument", InvNs);
+            w.WriteStartElement("typ", "sourceDocument", TypNs);
+            if (!string.IsNullOrWhiteSpace(id))
+                w.WriteElementString("typ", "id", TypNs, id);
+            if (!string.IsNullOrWhiteSpace(number))
+                w.WriteElementString("typ", "number", TypNs, number);
+            w.WriteEndElement(); // typ:sourceDocument
+            w.WriteEndElement(); // inv:cancelDocument
+
+            // invoiceHeader is required to specify the invoice type
+            w.WriteStartElement("inv", "invoiceHeader", InvNs);
+            w.WriteElementString("inv", "invoiceType", InvNs, invoiceType);
+            w.WriteEndElement(); // inv:invoiceHeader
+
+            w.WriteEndElement(); // inv:invoice
+            w.WriteEndElement(); // dat:dataPackItem
+            w.WriteEndElement(); // dat:dataPack
         }
 
         return Encoding.UTF8.GetString(ms.ToArray());

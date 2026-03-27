@@ -186,6 +186,71 @@ internal sealed class VoucherTools(IHttpClientFactory httpClientFactory, IConfig
         return await SendAsync(xml, serverUrl, username, password);
     }
 
+    [McpServerTool]
+    [Description(
+        "Cancels (stornos) a voucher in Pohoda by creating a reversal document. " +
+        "Supply either 'id' (Pohoda internal record ID) or 'number' (document number) to identify the voucher to cancel.")]
+    public async Task<string> CancelVoucher(
+        [Description("Pohoda internal record ID of the voucher to cancel.")]
+        string? id = null,
+        [Description("Document number of the voucher to cancel.")]
+        string? number = null)
+    {
+        if (string.IsNullOrWhiteSpace(id) && string.IsNullOrWhiteSpace(number))
+            throw new ArgumentException("Either 'id' or 'number' must be provided to identify the voucher to cancel.");
+
+        var (serverUrl, username, password, companyIco, appName) = GetPohodaSettings();
+        var xml = BuildCancelXml(id, number, companyIco, appName);
+        return await SendAsync(xml, serverUrl, username, password);
+    }
+
+    private static string BuildCancelXml(
+        string? id,
+        string? number,
+        string companyIco,
+        string appName)
+    {
+        var ms = new MemoryStream();
+        var settings = new XmlWriterSettings
+        {
+            Indent = true,
+            Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+        };
+
+        using (var w = XmlWriter.Create(ms, settings))
+        {
+            w.WriteStartElement("dat", "dataPack", DataNs);
+            w.WriteAttributeString("id",          "001");
+            w.WriteAttributeString("ico",         companyIco);
+            w.WriteAttributeString("application", appName);
+            w.WriteAttributeString("version",     "2.0");
+            w.WriteAttributeString("note",        string.Empty);
+
+            w.WriteStartElement("dat", "dataPackItem", DataNs);
+            w.WriteAttributeString("id",      "001");
+            w.WriteAttributeString("version", "2.0");
+
+            w.WriteStartElement("vch", "voucher", VchNs);
+            w.WriteAttributeString("version", "2.0");
+
+            // cancelDocument identifies the document to be storno-ed
+            w.WriteStartElement("vch", "cancelDocument", VchNs);
+            w.WriteStartElement("typ", "sourceDocument", TypNs);
+            if (!string.IsNullOrWhiteSpace(id))
+                w.WriteElementString("typ", "id", TypNs, id);
+            if (!string.IsNullOrWhiteSpace(number))
+                w.WriteElementString("typ", "number", TypNs, number);
+            w.WriteEndElement(); // typ:sourceDocument
+            w.WriteEndElement(); // vch:cancelDocument
+
+            w.WriteEndElement(); // vch:voucher
+            w.WriteEndElement(); // dat:dataPackItem
+            w.WriteEndElement(); // dat:dataPack
+        }
+
+        return Encoding.UTF8.GetString(ms.ToArray());
+    }
+
     private static string BuildImportXml(
         string voucherType,
         string cashAccount,
