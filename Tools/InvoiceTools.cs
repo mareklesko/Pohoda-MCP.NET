@@ -713,6 +713,8 @@ internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfig
             sb.AppendLine($"    \"symVar\": {ToJsonString(x.symVar)},");
             sb.AppendLine($"    \"partnerCompany\": {ToJsonString(x.partnerCompany)},");
             sb.AppendLine($"    \"partnerIco\": {ToJsonString(x.partnerIco)},");
+            sb.AppendLine($"    \"sumWithoutVat\": {ToJsonString(x.sumWithoutVat)},");
+            sb.AppendLine($"    \"vat\": {ToJsonString(x.vat)},");
             sb.AppendLine($"    \"totalHome\": {ToJsonString(x.totalHome)}");
             sb.Append("  }");
             if (i < items.Count - 1)
@@ -733,7 +735,11 @@ internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfig
         string? symVar,
         string? partnerCompany,
         string? partnerIco,
+        string? sumWithoutVat,
+        string? vat,
         string? totalHome,
+        decimal? SumWithoutVat,
+        decimal? Vat,
         decimal? TotalHome)
     {
         public string? Number => number;
@@ -768,10 +774,32 @@ internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfig
 
                 var summary = invoice.Element(inv + "invoiceSummary");
                 var homeCurrency = summary?.Element(inv + "homeCurrency");
-                var total = (string?)homeCurrency?.Element(typ + "priceNone")
-                         ?? (string?)homeCurrency?.Element(typ + "priceLow")
-                         ?? (string?)homeCurrency?.Element(typ + "priceHigh")
-                         ?? (string?)homeCurrency?.Element(typ + "price3");
+                var sumWithoutVatValue = SumCurrencyValues(
+                    homeCurrency,
+                    typ + "priceNone",
+                    typ + "priceLow",
+                    typ + "priceHigh",
+                    typ + "price3");
+
+                var vatValue = SumCurrencyValues(
+                    homeCurrency,
+                    typ + "priceLowVAT",
+                    typ + "priceHighVAT",
+                    typ + "price3VAT");
+
+                var sumWithVatBuckets = SumCurrencyValues(
+                    homeCurrency,
+                    typ + "priceNone",
+                    typ + "priceLowSum",
+                    typ + "priceHighSum",
+                    typ + "price3Sum");
+
+                var totalValue = sumWithVatBuckets ??
+                                 ((sumWithoutVatValue ?? 0m) + (vatValue ?? 0m));
+
+                var sumWithoutVat = ToInvariantString(sumWithoutVatValue);
+                var vat = ToInvariantString(vatValue);
+                var total = ToInvariantString(totalValue);
 
                 return new InvoiceRow(
                     (string?)header?.Element(inv + "id"),
@@ -782,11 +810,39 @@ internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfig
                     (string?)header?.Element(inv + "symVar"),
                     (string?)partnerAddress?.Element(typ + "company"),
                     (string?)partnerAddress?.Element(typ + "ico"),
+                    sumWithoutVat,
+                    vat,
                     total,
+                    sumWithoutVatValue,
+                    vatValue,
                     ParseDecimalSafe(total));
             })
             .ToList();
     }
+
+    private static decimal? SumCurrencyValues(XElement? homeCurrency, params XName[] elementNames)
+    {
+        if (homeCurrency is null)
+            return null;
+
+        decimal sum = 0m;
+        var hasAnyValue = false;
+
+        foreach (var elementName in elementNames)
+        {
+            var value = ParseDecimalSafe((string?)homeCurrency.Element(elementName));
+            if (value is null)
+                continue;
+
+            hasAnyValue = true;
+            sum += value.Value;
+        }
+
+        return hasAnyValue ? sum : null;
+    }
+
+    private static string? ToInvariantString(decimal? value)
+        => value?.ToString("0.##", CultureInfo.InvariantCulture);
 
     private static decimal? ParseDecimalSafe(string? value)
     {
