@@ -4,7 +4,7 @@ using System.Xml;
 using System.Xml.Linq;
 using Microsoft.Extensions.Configuration;
 
-internal abstract class PohodaToolBase(IHttpClientFactory httpClientFactory, IConfiguration configuration)
+public abstract class PohodaToolBase(IHttpClientFactory httpClientFactory, IConfiguration configuration)
 {
     private const string DataNs = "http://www.stormware.cz/schema/version_2/data.xsd";
     private const string AdbNs = "http://www.stormware.cz/schema/version_2/addressbook.xsd";

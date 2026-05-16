@@ -8,7 +8,7 @@ using System.Xml.Linq;
 using Microsoft.Extensions.Configuration;
 using ModelContextProtocol.Server;
 
-internal sealed class BankItemDto
+public sealed class BankItemDto
 {
     /// <summary>Item description text.</summary>
     public string Text { get; set; } = string.Empty;
@@ -41,7 +41,7 @@ internal sealed class BankItemDto
     public BankPartnerDto? Partner { get; set; }
 }
 
-internal sealed class BankPartnerDto
+public sealed class BankPartnerDto
 {
     /// <summary>Partner company name.</summary>
     public string? Company { get; set; }
@@ -67,14 +67,14 @@ internal sealed class BankPartnerDto
 
 [JsonSerializable(typeof(BankItemDto[]))]
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
-internal sealed partial class BankJsonContext : JsonSerializerContext { }
+public sealed partial class BankJsonContext : JsonSerializerContext { }
 
 /// <summary>
 /// MCP tools for the Pohoda bank movement (bankovy pohyb) XML import/list API.
 /// Import schema namespace: https://www.stormware.cz/schema/version_2/balance.xsd
 /// List schema namespace: https://www.stormware.cz/schema/version_2/list.xsd
 /// </summary>
-internal sealed class BankTools(IHttpClientFactory httpClientFactory, IConfiguration configuration)
+public sealed class BankTools(IHttpClientFactory httpClientFactory, IConfiguration configuration)
     : PohodaToolBase(httpClientFactory, configuration)
 {
     private const string DataNs = "http://www.stormware.cz/schema/version_2/data.xsd";
@@ -199,6 +199,12 @@ internal sealed class BankTools(IHttpClientFactory httpClientFactory, IConfigura
 
         return await SendAsync(xml, serverUrl, username, password);
     }
+
+    public static decimal SumWithoutVat(decimal amountWithVat, int vatRate)
+        => vatRate == 0 ? amountWithVat : Math.Round(amountWithVat / (1 + vatRate / 100m), 2);
+
+    public static decimal Vat(decimal amountWithVat, int vatRate)
+        => Math.Round(amountWithVat - SumWithoutVat(amountWithVat, vatRate), 2);
 
     private static string BuildImportXml(
         string bankAccount,

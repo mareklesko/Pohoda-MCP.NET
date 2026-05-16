@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build *)",
+      "Bash(dotnet *)",
+      "Bash(winget install *)",
+      "Bash(git checkout *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(gh pr *)",
+      "Bash(gh *)",
+      "Bash(where.exe gh *)",
+      "PowerShell(& \"C:\\\\Program Files\\\\GitHub CLI\\\\gh.exe\" --version)",
+      "WebFetch(domain:github.com)",
+      "Bash(mv Tools/* \"Pohoda-MCP.Net.Server/\")"
+    ],
+    "additionalDirectories": [
+      "D:\\Pohoda-MCP.NET\\Tools"
+    ]
+  }
+}

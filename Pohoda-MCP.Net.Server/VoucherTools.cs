@@ -8,7 +8,7 @@ using System.Xml.Linq;
 using Microsoft.Extensions.Configuration;
 using ModelContextProtocol.Server;
 
-internal sealed class VoucherItemDto
+public sealed class VoucherItemDto
 {
     /// <summary>Item description text.</summary>
     public string Text { get; set; } = string.Empty;
@@ -31,14 +31,14 @@ internal sealed class VoucherItemDto
 
 [JsonSerializable(typeof(VoucherItemDto[]))]
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
-internal sealed partial class VoucherJsonContext : JsonSerializerContext { }
+public sealed partial class VoucherJsonContext : JsonSerializerContext { }
 
 /// <summary>
 /// MCP tools for the Pohoda voucher (Pokladna) XML import/list API.
 /// Import schema namespace: https://www.stormware.cz/schema/version_2/voucher.xsd
 /// List schema namespace: https://www.stormware.cz/schema/version_2/list.xsd
 /// </summary>
-internal sealed class VoucherTools(IHttpClientFactory httpClientFactory, IConfiguration configuration)
+public sealed class VoucherTools(IHttpClientFactory httpClientFactory, IConfiguration configuration)
     : PohodaToolBase(httpClientFactory, configuration)
 {
     private const string DataNs = "http://www.stormware.cz/schema/version_2/data.xsd";

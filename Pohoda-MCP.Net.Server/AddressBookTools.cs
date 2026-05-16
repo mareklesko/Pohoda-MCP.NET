@@ -10,7 +10,7 @@ using ModelContextProtocol.Server;
 /// Wraps the adb:addressbook element in a dat:dataPack envelope and POSTs it to the configured Pohoda XML endpoint.
 /// Schema: https://www.stormware.sk/xml/schema/version_2/addressbook.xsd
 /// </summary>
-internal sealed class AddressBookTools(IHttpClientFactory httpClientFactory, IConfiguration configuration)
+public sealed class AddressBookTools(IHttpClientFactory httpClientFactory, IConfiguration configuration)
     : PohodaToolBase(httpClientFactory, configuration)
 {
     private const string DataNs    = "http://www.stormware.cz/schema/version_2/data.xsd";
