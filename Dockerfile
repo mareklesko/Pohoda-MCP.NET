@@ -9,12 +9,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 
 # Restore dependencies before copying the rest of the source for better layer caching
-COPY Pohoda-MCP.Net.csproj .
-RUN dotnet restore -r linux-x64
+COPY Pohoda-MCP.Net.Server/Pohoda-MCP.Net.Server.csproj Pohoda-MCP.Net.Server/
+RUN dotnet restore Pohoda-MCP.Net.Server/Pohoda-MCP.Net.Server.csproj -r linux-x64
 
-# Copy remaining source files and publish as a native AOT single-file binary
-COPY . .
-RUN dotnet publish Pohoda-MCP.Net.csproj \
+# Copy server source files and publish as a native AOT single-file binary
+COPY Pohoda-MCP.Net.Server/ Pohoda-MCP.Net.Server/
+RUN dotnet publish Pohoda-MCP.Net.Server/Pohoda-MCP.Net.Server.csproj \
     -c Release \
     -r linux-x64 \
     --no-restore \
@@ -39,4 +39,4 @@ ENV ASPNETCORE_HTTP_PORTS=8080
 #   Pohoda__ServerUrl, Pohoda__Username, Pohoda__Password, Pohoda__Ico
 # Transport mode defaults to "http"; set Mcp__Transport=stdio for stdio mode.
 
-ENTRYPOINT ["./Pohoda-MCP.Net"]
+ENTRYPOINT ["./Pohoda-MCP.Net.Server"]
