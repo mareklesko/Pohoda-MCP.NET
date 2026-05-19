@@ -25,7 +25,10 @@ public sealed class BankItemDto
     /// <summary>Due date (yyyy-MM-dd). Optional.</summary>
     public string? DueDate { get; set; }
 
-    /// <summary>Source agenda (zdrojova agenda).</summary>
+    /// <summary>Due days (days until due date). Optional. Required by schema.</summary>
+    public int? DueDays { get; set; }
+
+    /// <summary>Source agenda (zdrojova agenda). Required by schema.</summary>
     public string SourceAgenda { get; set; } = string.Empty;
 
     /// <summary>Amount in home currency (amountMD - mazanie, amountD - doplnenie).</summary>
@@ -39,6 +42,30 @@ public sealed class BankItemDto
 
     /// <summary>Optional partner address info.</summary>
     public BankPartnerDto? Partner { get; set; }
+
+    /// <summary>Foreign currency code (e.g., "USD", "EUR"). Optional.</summary>
+    public string? ForeignCurrencyCode { get; set; }
+
+    /// <summary>Amount in foreign currency MD.</summary>
+    public double? ForeignAmountMD { get; set; }
+
+    /// <summary>Amount in foreign currency D.</summary>
+    public double? ForeignAmountD { get; set; }
+
+    /// <summary>Remaining amount in foreign currency.</summary>
+    public double? ForeignAmountRemain { get; set; }
+
+    /// <summary>Exchange rate for foreign currency conversion.</summary>
+    public double? Rate { get; set; }
+
+    /// <summary>Amount in foreign currency (integer). Optional.</summary>
+    public int? Amount { get; set; }
+
+    /// <summary>Variable symbol (symVar).</summary>
+    public string? SymVar { get; set; }
+
+    /// <summary>Constant symbol (symConst).</summary>
+    public string? SymConst { get; set; }
 }
 
 public sealed class BankPartnerDto
@@ -106,8 +133,10 @@ public sealed class BankTools(IHttpClientFactory httpClientFactory, IConfigurati
         "Creates a bank movement in Pohoda. " +
         "Supply 'bankItemsJson' as a JSON array of objects with fields: " +
         "text (string), accountNo (string), pairSymbol (string), date (string, yyyy-MM-dd), " +
-        "amountMD (number), amountD (number), partner (object with company/name/street/city/zip/ico/dic, optional). " +
-        "Example: [{\"text\":\"Payment to supplier\",\"accountNo\":\"123456789/0100\",\"pairSymbol\":\"PAY001\",\"date\":\"2026-03-25\",\"amountMD\":0,\"amountD\":1500,\"partner\":{\"company\":\"Acme s.r.o.\"}}]")]
+        "amountMD (number), amountD (number), dueDays (integer, optional), sourceAgenda (string, required), " +
+        "partner (object with company/name/street/city/zip/ico/dic, optional), " +
+        "foreignCurrencyCode (string, optional), foreignAmountMD/foreignAmountD (number, optional). " +
+        "Example: [{\"text\":\"Payment\",\"accountNo\":\"123456789/0100\",\"pairSymbol\":\"PAY001\",\"date\":\"2026-03-25\",\"amountMD\":0,\"amountD\":1500,\"sourceAgenda\":\"MAIN\",\"dueDays\":30,\"partner\":{\"company\":\"Acme s.r.o.\"}}]")]
     public async Task<string> ImportBank(
         [Description("Bank account code (typ:ids), e.g. 'CZ000000000000000123456789'.")]
         string bankAccount = "CZ000000000000000123456789",
@@ -139,14 +168,41 @@ public sealed class BankTools(IHttpClientFactory httpClientFactory, IConfigurati
         string? note = null,
         [Description(
             "Bank items as JSON array. Each object: " +
-            "{\"text\":\"…\",\"accountNo\":\"…\",\"pairSymbol\":\"…\",\"date\":\"2026-03-25\",\"amountMD\":0,\"amountD\":100,\"partner\":{\"company\":\"…\"}}. " +
-            "For payments, set amountMD to payment amount and amountD to 0. For receipts, set amountD to received amount and amountMD to 0.")]
+            "{\"text\":\"…\",\"accountNo\":\"…\",\"pairSymbol\":\"…\",\"date\":\"2026-03-25\",\"amountMD\":0,\"amountD\":100,\"sourceAgenda\":\"MAIN\",\"dueDays\":30,\"partner\":{\"company\":\"…\"},\"foreignCurrencyCode\":\"EUR\",\"foreignAmountMD\":1500}. " +
+            "For payments, set amountMD to payment amount and amountD to 0. For receipts, set amountD to received amount and amountMD to 0. " +
+            "sourceAgenda is required by Pohoda schema.")]
         string? bankItemsJson = null)
     {
         var (serverUrl, username, password, companyIco, appName) = GetPohodaSettings();
 
         symVar = NormalizeOptionalSymbol(nameof(symVar), symVar);
         symConst = NormalizeOptionalSymbol(nameof(symConst), symConst);
+
+        // Deserialize bank items from JSON
+        BankItemDto[] items;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(bankItemsJson))
+                items = Array.Empty<BankItemDto>();
+            else
+                items = JsonSerializer.Deserialize<BankItemDto[]>(bankItemsJson, BankJsonContext.Default.BankItemDtoArray);
+        }
+        catch (JsonException ex)
+        {
+            throw new ArgumentException($"Invalid bank items JSON: {ex.Message}", nameof(bankItemsJson));
+        }
+
+        // Validate sourceAgenda in items
+        if (items.Length > 0)
+        {
+            foreach (var item in items)
+            {
+                if (string.IsNullOrWhiteSpace(item.SourceAgenda))
+                    throw new ArgumentException(
+                        "Parameter 'sourceAgenda' is required for each bank item (zdrojová agenda).",
+                        nameof(item));
+            }
+        }
 
         var supplierAddressbookId = await EnsureSupplierAndGetAddressbookIdAsync(
             new SupplierInfo(
@@ -158,24 +214,6 @@ public sealed class BankTools(IHttpClientFactory httpClientFactory, IConfigurati
                 null,
                 partnerIco,
                 partnerDic));
-
-        BankItemDto[] items = [];
-        if (!string.IsNullOrWhiteSpace(bankItemsJson))
-        {
-            try
-            {
-                items = JsonSerializer.Deserialize(bankItemsJson, BankJsonContext.Default.BankItemDtoArray)
-                        ?? [];
-            }
-            catch (JsonException ex)
-            {
-                throw new ArgumentException(
-                    "Parameter 'bankItemsJson' must be a JSON array like " +
-                    "[{\"text\":\"Payment\",\"accountNo\":\"123456789/0100\",\"pairSymbol\":\"PAY001\",\"date\":\"2026-03-25\",\"amountMD\":0,\"amountD\":1500\"}].",
-                    nameof(bankItemsJson),
-                    ex);
-            }
-        }
 
         var xml = BuildImportXml(
             bankAccount,
@@ -326,6 +364,29 @@ public sealed class BankTools(IHttpClientFactory httpClientFactory, IConfigurati
                     if (item.AmountRemain is not null)
                         w.WriteElementString("typ", "amountRemain", TypNs, item.AmountRemain.Value.ToString(CultureInfo.InvariantCulture));
                     w.WriteEndElement();
+
+                    if (item.ForeignCurrencyCode is not null)
+                    {
+                        w.WriteStartElement("bal", "foreignCurrency", BalNs);
+                        w.WriteElementString("typ", "currency", TypNs, item.ForeignCurrencyCode);
+                        if (item.ForeignAmountMD is not null)
+                            w.WriteElementString("typ", "amountMD", TypNs, item.ForeignAmountMD.Value.ToString(CultureInfo.InvariantCulture));
+                        if (item.ForeignAmountD is not null)
+                            w.WriteElementString("typ", "amountD", TypNs, item.ForeignAmountD.Value.ToString(CultureInfo.InvariantCulture));
+                        if (item.ForeignAmountRemain is not null)
+                            w.WriteElementString("typ", "amountRemain", TypNs, item.ForeignAmountRemain.Value.ToString(CultureInfo.InvariantCulture));
+                        if (item.Rate is not null)
+                            w.WriteElementString("typ", "rate", TypNs, item.Rate.Value.ToString(CultureInfo.InvariantCulture));
+                        if (item.Amount is not null)
+                            w.WriteElementString("typ", "amount", TypNs, item.Amount.Value.ToString(CultureInfo.InvariantCulture));
+                        w.WriteEndElement();
+                    }
+
+                    if (item.SymVar is not null)
+                        w.WriteElementString("bal", "symVar", BalNs, item.SymVar);
+
+                    if (item.SymConst is not null)
+                        w.WriteElementString("bal", "symConst", BalNs, item.SymConst);
 
                     if (item.Partner is not null)
                     {
