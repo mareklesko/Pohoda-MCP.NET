@@ -8,7 +8,7 @@ using System.Xml.Linq;
 using Microsoft.Extensions.Configuration;
 using ModelContextProtocol.Server;
 
-internal sealed class InternalDocumentItemDto
+public sealed class InternalDocumentItemDto
 {
     public string Text { get; set; } = string.Empty;
 
@@ -37,14 +37,14 @@ internal sealed class InternalDocumentItemDto
 
 [JsonSerializable(typeof(InternalDocumentItemDto[]))]
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
-internal sealed partial class InternalDocumentJsonContext : JsonSerializerContext { }
+public sealed partial class InternalDocumentJsonContext : JsonSerializerContext { }
 
 /// <summary>
 /// MCP tools for the Pohoda internal document XML import/list API.
 /// Import schema namespace: https://www.stormware.cz/schema/version_2/intDoc.xsd
 /// List schema namespace: https://www.stormware.cz/schema/version_2/list.xsd
 /// </summary>
-internal sealed class InternalDocumentTools(IHttpClientFactory httpClientFactory, IConfiguration configuration)
+public sealed class InternalDocumentTools(IHttpClientFactory httpClientFactory, IConfiguration configuration)
     : PohodaToolBase(httpClientFactory, configuration)
 {
     private const string DataNs = "http://www.stormware.cz/schema/version_2/data.xsd";

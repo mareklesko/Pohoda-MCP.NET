@@ -45,6 +45,8 @@ The server currently provides these tools:
 - `list_vouchers`
 - `import_internal_document`
 - `list_internal_documents`
+- `import_bank`
+- `list_banks`
 
 ## Address Book Tools
 
@@ -575,6 +577,73 @@ Examples:
 {
   "numberContains": "2026",
   "textContains": "travel"
+}
+```
+
+## Bank Tools
+
+### import_bank
+
+Creates a bank movement in Pohoda.
+
+Important behavior:
+
+- `bankAccount` is a Pohoda bank account code (`typ:ids`)
+- `bankItemsJson` must be a JSON array serialized as a string
+- For payments, set `amountMD` to payment amount and `amountD` to 0
+- For receipts, set `amountD` to received amount and `amountMD` to 0
+
+Example with partner lookup:
+
+```json
+{
+  "bankAccount": "CZ000000000000000123456789",
+  "date": "2026-03-25",
+  "text": "Payment to supplier",
+  "partnerCompany": "Acme s.r.o.",
+  "partnerIco": "12345678",
+  "bankItemsJson": "[{\"text\":\"Payment\",\"accountNo\":\"123456789/0100\",\"pairSymbol\":\"PAY001\",\"date\":\"2026-03-25\",\"amountMD\":1500,\"amountD\":0}]"
+}
+```
+
+Example with receipt:
+
+```json
+{
+  "bankAccount": "CZ000000000000000123456789",
+  "date": "2026-03-26",
+  "text": "Payment received",
+  "partnerCompany": "Customer a.s.",
+  "partnerIco": "87654321",
+  "symVar": "2026001",
+  "bankItemsJson": "[{\"text\":\"Received payment\",\"accountNo\":\"87654321/0100\",\"pairSymbol\":\"REC001\",\"date\":\"2026-03-26\",\"amountMD\":0,\"amountD\":2500}]"
+}
+```
+
+### list_banks
+
+Lists bank movements as JSON.
+
+Arguments:
+
+- `partnerIco` optional exact match filter
+- `numberContains` optional case-insensitive substring filter
+
+Examples:
+
+```json
+{}
+```
+
+```json
+{
+  "partnerIco": "12345678"
+}
+```
+
+```json
+{
+  "numberContains": "2026"
 }
 ```
 

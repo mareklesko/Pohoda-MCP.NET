@@ -13,7 +13,7 @@ using ModelContextProtocol.Server;
 // DTO for a single invoice line item – kept internal and simple for AOT safety
 // ---------------------------------------------------------------------------
 
-internal sealed class InvoiceItemDto
+public sealed class InvoiceItemDto
 {
     /// <summary>Item description text.</summary>
     public string Text { get; set; } = string.Empty;
@@ -34,9 +34,9 @@ internal sealed class InvoiceItemDto
 // Source-generation context required for native-AOT JSON deserialization
 [JsonSerializable(typeof(InvoiceItemDto[]))]
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
-internal sealed partial class InvoiceJsonContext : JsonSerializerContext { }
+public sealed partial class InvoiceJsonContext : JsonSerializerContext { }
 
-internal sealed record InvoiceImportRequest(
+public sealed record InvoiceImportRequest(
     string InvoiceType,
     string? Number,
     string? Date,
@@ -62,7 +62,7 @@ internal sealed record InvoiceImportRequest(
 /// Wraps the inv:invoice element in a dat:dataPack envelope and POSTs it to the configured Pohoda XML endpoint.
 /// Schema: https://www.stormware.sk/xml/schema/version_2/invoice.xsd
 /// </summary>
-internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfiguration configuration)
+public sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfiguration configuration)
     : PohodaToolBase(httpClientFactory, configuration)
 {
     private const string DataNs = "http://www.stormware.cz/schema/version_2/data.xsd";
@@ -400,7 +400,7 @@ internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfig
         return await SendAsync(xml, serverUrl, username, password);
     }
 
-    private static string? NormalizeSymVar(string? number, string? symVar)
+    public static string? NormalizeSymVar(string? number, string? symVar)
     {
         if (!string.IsNullOrWhiteSpace(number))
         {
@@ -416,7 +416,7 @@ internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfig
         return NormalizeOptionalSymbol(nameof(symVar), symVar);
     }
 
-    private static InvoiceItemDto[] DeserializeInvoiceItems(string? invoiceItemsJson)
+    public static InvoiceItemDto[] DeserializeInvoiceItems(string? invoiceItemsJson)
     {
         if (string.IsNullOrWhiteSpace(invoiceItemsJson))
             return [];
@@ -844,7 +844,7 @@ internal sealed class InvoiceTools(IHttpClientFactory httpClientFactory, IConfig
     private static string? ToInvariantString(decimal? value)
         => value?.ToString("0.##", CultureInfo.InvariantCulture);
 
-    private static decimal? ParseDecimalSafe(string? value)
+    public static decimal? ParseDecimalSafe(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
             return null;
